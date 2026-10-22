@@ -33,6 +33,8 @@ class Play {
   int energy;         // 1-5
   String place;       // HOME, UNI, TRANSIT, OTHER
   String note;        // free text, shown on hover
+  String song;        // song title, may be empty
+  String difficulty;  // difficulty name, may be empty
 
   // ---- where it is drawn ----
   float x, y;         // centre of the cell
@@ -56,14 +58,31 @@ class Play {
     energy = row.getInt("energy");
     place = cell(row, "place");
     note = cell(row, "note");
+    song = cell(row, "song");
+    difficulty = cell(row, "difficulty");
     checkMods();
   }
 
-  // The text in one column, trimmed, or "" if the cell is empty.
+  // The text in one column, trimmed, or "" if the cell is empty or the
+  // column doesn't exist (older CSVs have no song or difficulty).
   String cell(TableRow row, String column) {
-    String value = row.getString(column);
+    String value;
+    try {
+      value = row.getString(column);
+    } catch (IllegalArgumentException e) {
+      return "";
+    }
     if (value == null) return "";
     return trim(value);
+  }
+
+  // "Song [Difficulty]" for the tooltip, shortened if it's very long.
+  String songLabel() {
+    String s = song;
+    if (difficulty.length() > 0) s += " [" + difficulty + "]";
+    s = trim(s);
+    if (s.length() > 55) s = s.substring(0, 52) + "...";
+    return s;
   }
 
   // mods is typed by hand, so warn about any code we don't know.
@@ -131,7 +150,7 @@ class Play {
     return 4;
   }
 
-  void display(boolean highlighted) {
+  void display(boolean hovered, boolean selected) {
     String letter = rankLetter();
     color c = rankColour(letter, hasMod("HD") || hasMod("FL"));
     float r = radius();
@@ -175,15 +194,39 @@ class Play {
 
     drawMoodStem();
 
-    if (highlighted) {
+    // thin box when hovered, thick box when it's the selected play
+    if (hovered || selected) {
       noFill();
       stroke(ACCENT);
-      strokeWeight(1.5);
+      strokeWeight(selected ? 3 : 1.5);
       rectMode(CENTER);
       rect(0, 0, cellSize * 1.15, cellSize * 0.98, 4);
       rectMode(CORNER);
     }
     popMatrix();
+  }
+
+  // Draw this glyph somewhere else at another size (used by the selected
+  // play card), then put its real position back.
+  void displayAt(float px, float py, float size) {
+    float oldX = x;
+    float oldY = y;
+    float oldSize = cellSize;
+    setPosition(px, py, size);
+    display(false, false);
+    setPosition(oldX, oldY, oldSize);
+  }
+
+  // The play's details for the selected play card, one line each.
+  String[] cardLines() {
+    StringList lines = new StringList();
+    lines.append(date + "  " + time + "  at " + place.toLowerCase());
+    lines.append(nf(stars, 0, 2) + " stars  " + mapStyle.toLowerCase());
+    lines.append("mods: " + mods + "   attempt " + attempt);
+    lines.append((passed ? "rank " + rankLetter() : "failed") + "   " + nf(accuracy, 0, 2) + "%");
+    lines.append(misses == 0 ? "full combo" : misses + " misses");
+    lines.append("mood " + moodBefore + " -> " + moodAfter + "   energy " + energy + "/5");
+    return lines.array();
   }
 
   // Paint drips running down from the bottom of the circle, one per
@@ -265,7 +308,9 @@ class Play {
   }
 
   String describe() {
-    String s = "#" + id + "   " + date + "  " + time + "  at " + place.toLowerCase() + "\n"
+    String s = "";
+    if (songLabel().length() > 0) s += songLabel() + "\n";
+    s += "#" + id + "   " + date + "  " + time + "  at " + place.toLowerCase() + "\n"
              + mods + "  " + nf(stars, 0, 2) + " stars  " + mapStyle.toLowerCase()
              + "  (attempt " + attempt + ")\n"
              + (passed ? "Passed, rank " + rankLetter() : "Failed")

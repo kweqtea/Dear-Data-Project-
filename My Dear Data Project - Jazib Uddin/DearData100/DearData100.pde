@@ -37,6 +37,7 @@ final float MAX_STARS = 8;
 final float MIN_ACCURACY = 80;
 
 ArrayList<Play> plays = new ArrayList<Play>();
+Play selected = null;   // the play last clicked, shown in the card
 StringList days = new StringList();
 PFont bodyFont;
 PFont boldFont;
@@ -68,7 +69,8 @@ void setup() {
 }
 
 void loadData(String filename) {
-  Table table = loadTable(filename, "header");
+  // "csv" so quoted song titles with commas in them load correctly
+  Table table = loadTable(filename, "header,csv");
   for (TableRow row : table.rows()) {
     // Excel adds empty rows at the end of the export: skip rows with no date
     String date = row.getString("date");
@@ -228,11 +230,67 @@ void draw() {
   for (Play p : plays) {
     boolean over = p.isUnderMouse();
     if (over) hovered = p;
-    p.display(over);
+    p.display(over, p == selected);
   }
 
   drawLegend();
+  drawSelectedCard();
   if (hovered != null) drawTooltip(hovered);
+}
+
+// Clicking a circle selects it. Clicking empty space keeps the last one.
+void mousePressed() {
+  for (Play p : plays) {
+    if (p.isUnderMouse()) selected = p;
+  }
+}
+
+// The card under the legend: the selected play's song, a big copy of
+// its glyph, and its details. Shows a hint until something is clicked.
+void drawSelectedCard() {
+  float cx = width - LEGEND_WIDTH - 4;
+  float cy = height - 204;
+  float cw = LEGEND_WIDTH - 12;
+  float ch = 190;
+
+  fill(0, 0, 0, 150);
+  stroke(selected == null ? color(255, 30) : ACCENT);
+  strokeWeight(1.5);
+  rect(cx, cy, cw, ch, 6);
+
+  if (selected == null) {
+    fill(MUTED);
+    noStroke();
+    textAlign(CENTER, CENTER);
+    textSize(12);
+    text("Click a play to see it here", cx + cw / 2, cy + ch / 2);
+    return;
+  }
+
+  // song [difficulty], wrapped onto two lines if it needs them
+  String title = selected.songLabel();
+  if (title.length() == 0) title = "Play #" + selected.id;
+  fill(INK);
+  noStroke();
+  textFont(boldFont);
+  textSize(13);
+  textAlign(LEFT, TOP);
+  text(title, cx + 12, cy + 10, cw - 24, 44);
+  textFont(bodyFont);
+
+  selected.displayAt(cx + 54, cy + 108, 76);
+
+  fill(INK);
+  textSize(11);
+  textAlign(LEFT, TOP);
+  String[] lines = selected.cardLines();
+  for (int i = 0; i < lines.length; i++) {
+    text(lines[i], cx + 118, cy + 60 + i * 15);
+  }
+  if (selected.note.length() > 0) {
+    fill(MUTED);
+    text("\"" + selected.note + "\"", cx + 12, cy + 156, cw - 24, 30);
+  }
 }
 
 // Dark background with a red glow and paint specks. randomSeed() makes
@@ -468,7 +526,7 @@ void drawLegend() {
   fill(MUTED);
   textAlign(LEFT, TOP);
   textSize(11);
-  text("Each row is a day, plays in order. The right\ncolumn adds up that day's mood changes.\nHover a circle for details. 's' saves a PNG.", lx, y);
+  text("Each row is a day, plays in order. Right column\n= mood change that day. 's' saves a PNG.", lx, y);
 }
 
 void legendCircle(float cx, float cy, float r, String letter, color c, boolean filled) {

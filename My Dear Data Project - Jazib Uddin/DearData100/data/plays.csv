@@ -1,1 +1,2 @@
-id,date,time,mods,stars,attempt,passed,rank,accuracy,misses,mapStyle,moodBefore,moodAfter,energy,place,note
+id,date,time,mods,stars,attempt,passed,rank,accuracy,misses,mapStyle,moodBefore,moodAfter,energy,place,note,song,difficulty
+1,22/10/2026,22:29,NM,5.43,1,Y,A,96.86,7,JUMP,3,4,5,HOME,"First Map logged, kind of nervous but excited",Living Life In The Night,"it gets better y'all, i promise"
