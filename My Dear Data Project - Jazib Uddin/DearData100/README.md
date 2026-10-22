@@ -21,7 +21,8 @@ Styled after my osu! skin: dark red background, rank and mod colours from the sk
 | mods (e.g. `HD+DT`, `NM` = none) | DT red ring, NC purple dashed ring, HT green half ring, HD faded circle; on the left: HR red spike, EZ green spike, FL red dot, NF green ring, RX blue square |
 | moodBefore, moodAfter | stem on the right: white arrow up = happier, red arrow down = worse |
 | time | order within the day (busy days wrap onto more lines) |
-| song, difficulty | "Song [Difficulty]" at the top of the hover tooltip and of the card you get by clicking a circle |
-| attempt, energy, place, note | hover tooltip |
+| song, difficulty | "Song [Difficulty]" in the hover tooltip; in the card you get by clicking a circle, the song with the difficulty on the line below (long names wrap) |
+| duration (m:ss, e.g. `2:27`; also 2m27s or seconds) | card: "Duration: 2m27s  Attempt: #1" |
+| attempt, energy, place, note | hover tooltip and card |
 
 The right-hand column adds up each day's mood changes. Click a circle to pin its details in the card at the bottom right (it stays until you click another). Press `s` to save a PNG.

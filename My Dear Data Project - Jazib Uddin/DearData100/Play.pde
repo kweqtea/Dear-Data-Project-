@@ -35,22 +35,23 @@ class Play {
   String note;        // free text, shown on hover
   String song;        // song title, may be empty
   String difficulty;  // difficulty name, may be empty
+  int duration;       // seconds spent on this play, 0 = not logged
 
   // ---- where it is drawn ----
   float x, y;         // centre of the cell
   float cellSize;     // height of the cell; the glyph fits inside it
 
   Play(TableRow row) {
-    id = row.getInt("id");
-    date = cell(row, "date");
-    time = cell(row, "time");
+    id = int(cell(row, "id"));
+    date = normaliseDate(cell(row, "date"));
+    time = normaliseTime(cell(row, "time"));
     mods = cell(row, "mods").toUpperCase();
     if (mods.length() == 0) mods = "NM";
     stars = row.getFloat("stars");
     attempt = row.getInt("attempt");
     passed = cell(row, "passed").equalsIgnoreCase("Y");
     rank = cell(row, "rank").toUpperCase();
-    accuracy = row.getFloat("accuracy");
+    accuracy = parseAccuracy(cell(row, "accuracy"));
     misses = row.getInt("misses");
     mapStyle = cell(row, "mapStyle").toUpperCase();
     moodBefore = row.getInt("moodBefore");
@@ -60,6 +61,7 @@ class Play {
     note = cell(row, "note");
     song = cell(row, "song");
     difficulty = cell(row, "difficulty");
+    duration = parseDuration(cell(row, "duration"));
     checkMods();
   }
 
@@ -74,6 +76,105 @@ class Play {
     }
     if (value == null) return "";
     return trim(value);
+  }
+
+  // Accuracy may be typed 96.86 or 96.86%, and Excel sometimes saves a
+  // percentage as 0.9686. All three become 96.86.
+  float parseAccuracy(String a) {
+    float value = float(trim(a.replace("%", "")));
+    if (Float.isNaN(value)) {
+      println("Play " + id + ": can't read accuracy '" + a + "', using 0");
+      return 0;
+    }
+    if (value > 0 && value <= 1) value *= 100;
+    return value;
+  }
+
+  // Duration in seconds. Accepts 2:27 (m:ss), 0:02:27 (h:mm:ss), 2m27s,
+  // 2m, 147s or a plain 147 (seconds). Empty or unreadable gives 0.
+  int parseDuration(String d) {
+    d = trim(d.toLowerCase());
+    if (d.length() == 0) return 0;
+    if (d.indexOf(':') >= 0) {
+      String[] parts = split(d, ':');
+      int total = 0;
+      for (int i = 0; i < parts.length; i++) total = total * 60 + int(trim(parts[i]));
+      return total;
+    }
+    if (d.indexOf('m') >= 0 || d.indexOf('s') >= 0) {
+      int total = 0;
+      String[] mins = match(d, "(\\d+)\\s*m");
+      String[] secs = match(d, "(\\d+)\\s*s");
+      if (mins != null) total += int(mins[1]) * 60;
+      if (secs != null) total += int(secs[1]);
+      return total;
+    }
+    int value = int(d);
+    if (value < 0) value = 0;
+    return value;
+  }
+
+  // 147 -> "2m27s", 0 -> "-"
+  String durationText() {
+    if (duration <= 0) return "-";
+    if (duration < 60) return duration + "s";
+    return (duration / 60) + "m" + nf(duration % 60, 2) + "s";
+  }
+
+  // "JUMP" -> "Jump"
+  String capitalise(String word) {
+    if (word.length() == 0) return word;
+    return word.substring(0, 1).toUpperCase() + word.substring(1).toLowerCase();
+  }
+
+  // Dates should be typed 2026-10-22, but Excel often changes them, e.g.
+  // 22/10/2026, 22/10/26, 22/10/2026 00:00, 22-Oct-26 or even a plain
+  // number like 46317 (Excel's day count). Turn all of these into
+  // YYYY-MM-DD so a day isn't split into two bars.
+  String normaliseDate(String d) {
+    d = trim(d);
+    // drop a time on the end, e.g. "22/10/2026 00:00"
+    if (d.indexOf(' ') > 0) d = d.substring(0, d.indexOf(' '));
+
+    // a plain number: days since 30 Dec 1899, which is how Excel stores dates
+    if (d.matches("\\d{5}")) {
+      return java.time.LocalDate.of(1899, 12, 30).plusDays(int(d)).toString();
+    }
+
+    String[] parts = splitTokens(d, "/-.");
+    if (parts.length != 3) {
+      println("Play " + id + ": can't read date '" + d + "'");
+      return d;
+    }
+    int day, month, year;
+    if (parts[0].length() == 4) {          // 2026-10-22
+      year = int(parts[0]);
+      month = monthNumber(parts[1]);
+      day = int(parts[2]);
+    } else {                               // 22/10/2026, 22-Oct-26
+      day = int(parts[0]);
+      month = monthNumber(parts[1]);
+      year = int(parts[2]);
+    }
+    if (year < 100) year += 2000;
+    return year + "-" + nf(month, 2) + "-" + nf(day, 2);
+  }
+
+  // "10" -> 10, "Oct" -> 10
+  int monthNumber(String m) {
+    String[] names = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
+    String upper = m.toUpperCase();
+    for (int i = 0; i < names.length; i++) {
+      if (upper.startsWith(names[i])) return i + 1;
+    }
+    return int(m);
+  }
+
+  // Times should be HH:MM; also accept 9:05 or 23:14:00.
+  String normaliseTime(String t) {
+    String[] parts = split(t, ':');
+    if (parts.length < 2) return t;
+    return nf(int(trim(parts[0])), 2) + ":" + nf(int(trim(parts[1])), 2);
   }
 
   // "Song [Difficulty]" for the tooltip, shortened if it's very long.
@@ -221,11 +322,11 @@ class Play {
   String[] cardLines() {
     StringList lines = new StringList();
     lines.append(date + "  " + time + "  at " + place.toLowerCase());
-    lines.append(nf(stars, 0, 2) + " stars  " + mapStyle.toLowerCase());
-    lines.append("mods: " + mods + "   attempt " + attempt);
-    lines.append((passed ? "rank " + rankLetter() : "failed") + "   " + nf(accuracy, 0, 2) + "%");
-    lines.append(misses == 0 ? "full combo" : misses + " misses");
-    lines.append("mood " + moodBefore + " -> " + moodAfter + "   energy " + energy + "/5");
+    lines.append("Map: " + capitalise(mapStyle) + " " + nf(stars, 0, 2) + "* with " + mods);
+    lines.append((passed ? "Rank " + rankLetter() : "Failed") + "  " + nf(accuracy, 0, 2) + "%  "
+                 + (misses == 0 ? "FC" : misses + (misses == 1 ? " miss" : " misses")));
+    lines.append("Duration: " + durationText() + "  Attempt: #" + attempt);
+    lines.append("Mood " + moodBefore + " -> " + moodAfter + "  Energy " + energy + "/5");
     return lines.array();
   }
 

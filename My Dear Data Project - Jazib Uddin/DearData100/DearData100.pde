@@ -71,15 +71,42 @@ void setup() {
 void loadData(String filename) {
   // "csv" so quoted song titles with commas in them load correctly
   Table table = loadTable(filename, "header,csv");
+
+  // Excel's "CSV UTF-8" puts an invisible BOM character before the first
+  // heading, which would turn "id" into "\uFEFFid". Remove it.
+  String first = table.getColumnTitle(0);
+  if (first != null && first.startsWith("\uFEFF")) table.setColumnTitle(0, first.substring(1));
+
   for (TableRow row : table.rows()) {
     // Excel adds empty rows at the end of the export: skip rows with no date
     String date = row.getString("date");
     if (date == null || trim(date).length() == 0) continue;
     Play p = new Play(row);
+    if (p.id == 0) p.id = plays.size() + 1;  // no id typed: use the row number
     plays.add(p);
+  }
+
+  sortPlays();
+  for (Play p : plays) {
     if (!days.hasValue(p.date)) days.append(p.date);
   }
   println("Loaded " + plays.size() + " plays over " + days.size() + " days");
+}
+
+// Put plays in date and time order, in case rows were typed out of order.
+// Dates are YYYY-MM-DD and times HH:MM, so comparing the text works.
+// (Insertion sort: take each play and slide it back to where it belongs.)
+void sortPlays() {
+  for (int i = 1; i < plays.size(); i++) {
+    Play p = plays.get(i);
+    String key = p.date + " " + p.time;
+    int j = i - 1;
+    while (j >= 0 && (plays.get(j).date + " " + plays.get(j).time).compareTo(key) > 0) {
+      plays.set(j + 1, plays.get(j));
+      j--;
+    }
+    plays.set(j + 1, p);
+  }
 }
 
 // Work out where each glyph goes: one bar per day, one column per play.
@@ -166,6 +193,18 @@ int countPassed(ArrayList<Play> list) {
   return n;
 }
 
+// "2026-10-22" -> "22/10" (day/month) for the label on each row
+String dayLabel(String isoDate) {
+  String[] parts = split(isoDate, '-');
+  if (parts.length != 3) return isoDate;
+  return parts[2] + "/" + parts[1];
+}
+
+// "1 play", "2 plays"
+String plural(int n, String word) {
+  return n + " " + word + (n == 1 ? "" : "s");
+}
+
 // Rank letter -> colour, silver for X and S when HD or FL was on.
 color rankColour(String letter, boolean silver) {
   if (letter.equals("X") || letter.equals("S")) return silver ? RANK_SILVER : RANK_GOLD;
@@ -219,10 +258,10 @@ void draw() {
     if (p.moodChange() > 0) up++;
     if (p.moodChange() < 0) down++;
   }
-  drawTitle(plays.size() + " plays over " + days.size() + " days ("
+  drawTitle(plural(plays.size(), "play") + " over " + plural(days.size(), "day") + " ("
             + days.get(0) + " to " + days.get(days.size() - 1) + ").  "
             + round(100.0 * countPassed(plays) / plays.size()) + "% passed.  "
-            + up + " plays lifted my mood, " + down + " lowered it.");
+            + plural(up, "play") + " lifted my mood, " + down + " lowered it.");
   drawRowBars();
   drawDayLabels();
 
@@ -245,52 +284,114 @@ void mousePressed() {
   }
 }
 
-// The card under the legend: the selected play's song, a big copy of
-// its glyph, and its details. Shows a hint until something is clicked.
+// The card under the legend: the selected play's song, its difficulty on
+// the line below, a big copy of its glyph, and its details. Long names wrap
+// instead of being cut, and the card grows upwards to fit them.
 void drawSelectedCard() {
-  float cx = width - LEGEND_WIDTH - 4;
-  float cy = height - 204;
   float cw = LEGEND_WIDTH - 12;
-  float ch = 190;
-
-  fill(0, 0, 0, 150);
-  stroke(selected == null ? color(255, 30) : ACCENT);
-  strokeWeight(1.5);
-  rect(cx, cy, cw, ch, 6);
+  float cx = width - LEGEND_WIDTH - 4;
+  float bottom = height - 8;
+  float textW = cw - 24;
 
   if (selected == null) {
+    float ch = 120;
+    fill(0, 0, 0, 150);
+    stroke(255, 30);
+    strokeWeight(1.5);
+    rect(cx, bottom - ch, cw, ch, 6);
     fill(MUTED);
     noStroke();
     textAlign(CENTER, CENTER);
     textSize(12);
-    text("Click a play to see it here", cx + cw / 2, cy + ch / 2);
+    text("Click a play to see it here", cx + cw / 2, bottom - ch / 2);
     return;
   }
 
-  // song [difficulty], wrapped onto two lines if it needs them
-  String title = selected.songLabel();
-  if (title.length() == 0) title = "Play #" + selected.id;
-  fill(INK);
-  noStroke();
+  // work out the wrapped lines first, so we know how tall the card is
+  String song = selected.song;
+  if (song.length() == 0) song = "Play #" + selected.id;
   textFont(boldFont);
   textSize(13);
-  textAlign(LEFT, TOP);
-  text(title, cx + 12, cy + 10, cw - 24, 44);
+  String[] titleLines = wrapText(song, textW, 2);
   textFont(bodyFont);
+  textSize(11);
+  String[] diffLines = wrapText(selected.difficulty, textW, 3);
+  String[] noteLines = new String[0];
+  if (selected.note.length() > 0) noteLines = wrapText("\"" + selected.note + "\"", textW, 1);
+  String[] stats = selected.cardLines();
 
-  selected.displayAt(cx + 54, cy + 108, 76);
+  float statsH = stats.length * 15;
+  float ch = 10 + titleLines.length * 16 + diffLines.length * 14 + 10 + statsH + noteLines.length * 14 + 14;
+  float cy = bottom - ch;
+
+  fill(0, 0, 0, 150);
+  stroke(ACCENT);
+  strokeWeight(1.5);
+  rect(cx, cy, cw, ch, 6);
+
+  float y = cy + 10;
+  noStroke();
+  textAlign(LEFT, TOP);
+  fill(INK);
+  textFont(boldFont);
+  textSize(13);
+  for (int i = 0; i < titleLines.length; i++) {
+    text(titleLines[i], cx + 12, y);
+    y += 16;
+  }
+  textFont(bodyFont);
+  textSize(11);
+  fill(MUTED);
+  for (int i = 0; i < diffLines.length; i++) {
+    text(diffLines[i], cx + 12, y);
+    y += 14;
+  }
+  y += 10;
+
+  selected.displayAt(cx + 44, y + statsH / 2, 60);
 
   fill(INK);
   textSize(11);
   textAlign(LEFT, TOP);
-  String[] lines = selected.cardLines();
-  for (int i = 0; i < lines.length; i++) {
-    text(lines[i], cx + 118, cy + 60 + i * 15);
+  for (int i = 0; i < stats.length; i++) {
+    text(stats[i], cx + 96, y + i * 15);
   }
-  if (selected.note.length() > 0) {
-    fill(MUTED);
-    text("\"" + selected.note + "\"", cx + 12, cy + 156, cw - 24, 30);
+  y += statsH + 4;
+
+  fill(MUTED);
+  for (int i = 0; i < noteLines.length; i++) {
+    text(noteLines[i], cx + 12, y);
+    y += 14;
   }
+}
+
+// Split text into lines no wider than w, using the current font size.
+// If it needs more than maxLines, the last line ends with "...".
+String[] wrapText(String s, float w, int maxLines) {
+  StringList lines = new StringList();
+  if (trim(s).length() == 0) return lines.array();
+  String[] words = splitTokens(s, " ");
+  String line = "";
+  for (int i = 0; i < words.length; i++) {
+    String tryLine = line.length() == 0 ? words[i] : line + " " + words[i];
+    if (textWidth(tryLine) <= w || line.length() == 0) {
+      line = tryLine;
+    } else {
+      lines.append(line);
+      line = words[i];
+    }
+  }
+  lines.append(line);
+
+  if (lines.size() > maxLines) {
+    String last = lines.get(maxLines - 1);
+    while (last.length() > 0 && textWidth(last + "...") > w) {
+      last = last.substring(0, last.length() - 1);
+    }
+    lines.set(maxLines - 1, last + "...");
+    while (lines.size() > maxLines) lines.remove(lines.size() - 1);
+  }
+  return lines.array();
 }
 
 // Dark background with a red glow and paint specks. randomSeed() makes
@@ -384,8 +485,7 @@ void drawDayLabels() {
     float y = dayTop[d] + rowH * dayLines[d] / 2;
     fill(MUTED);
     textAlign(LEFT, CENTER);
-    // show "10-22" instead of "2026-10-22" to save space
-    text(days.get(d).substring(5), MARGIN, y);
+    text(dayLabel(days.get(d)), MARGIN, y);
 
     int change = totalMoodChange(today);
     if (change > 0) fill(MOOD_UP);
@@ -526,7 +626,7 @@ void drawLegend() {
   fill(MUTED);
   textAlign(LEFT, TOP);
   textSize(11);
-  text("Each row is a day, plays in order. Right column\n= mood change that day. 's' saves a PNG.", lx, y);
+  text("Rows = days. Right column = mood change.", lx, y);
 }
 
 void legendCircle(float cx, float cy, float r, String letter, color c, boolean filled) {
