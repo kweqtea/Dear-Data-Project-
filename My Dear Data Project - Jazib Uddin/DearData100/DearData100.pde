@@ -9,7 +9,7 @@
 // data/plays.csv starts with only the header row. Add one row per play
 // (or save your log from Excel as CSV UTF-8) and run again.
 //
-// Keys: 's' saves a PNG of the current frame.
+// Keys: 's' saves a PNG of the current frame into the screenshots folder.
 
 final color BG = color(20, 14, 18);
 final color INK = color(240, 235, 237);
@@ -41,6 +41,8 @@ Play selected = null;   // the play last clicked, shown in the card
 StringList days = new StringList();
 PFont bodyFont;
 PFont boldFont;
+PImage artLeft;         // guitar corner from my osu! skin (see README)
+PImage artRight;        // Aira corner from my osu! skin (see README)
 
 final int LEGEND_WIDTH = 300;
 final int MARGIN = 40;
@@ -64,6 +66,8 @@ void setup() {
   boldFont = createFont("SansSerif.bold", 12);
   textFont(bodyFont);
   noiseSeed(7);
+  artLeft = loadImage("art-left.png");    // null if the file is missing
+  artRight = loadImage("art-right.png");
   loadData("plays.csv");
   layoutGlyphs();
 }
@@ -246,6 +250,7 @@ void drawStyleArc(String style, float cx, float cy, float d, float sweep, float 
 
 void draw() {
   drawBackground();
+  drawBackgroundArt();
   if (plays.size() == 0) {
     drawTitle("No plays logged yet. Add rows to data/plays.csv (keep the header row) and run again.");
     drawLegend();
@@ -420,6 +425,25 @@ void drawBackground() {
       ellipse(sx + random(-14, 14), sy + random(-14, 14), s, s);
     }
   }
+}
+
+// Art from my osu! skin's song select, faded: the guitar corner bottom
+// left and Aira bottom right (left of the legend), like in game. Drawn
+// straight after the background, so everything else sits on top.
+void drawBackgroundArt() {
+  float scale = 0.45;   // the skin images are 2x size
+  tint(255, 85);
+  if (artLeft != null) {
+    float w = artLeft.width * scale;
+    float h = artLeft.height * scale;
+    image(artLeft, 0, height - h, w, h);
+  }
+  if (artRight != null) {
+    float w = artRight.width * scale;
+    float h = artRight.height * scale;
+    image(artRight, width - LEGEND_WIDTH - 14 - w, height - h, w, h);
+  }
+  noTint();
 }
 
 // A rough, hand-drawn looking line made of short jittered segments.
@@ -715,7 +739,9 @@ void drawTooltip(Play p) {
 
 void keyPressed() {
   if (key == 's' || key == 'S') {
-    saveFrame("dear-data-####.png");
+    // file name gets the date and time, e.g. dear-data-2026-10-22_235930.png
+    saveFrame("screenshots/dear-data-" + year() + "-" + nf(month(), 2) + "-" + nf(day(), 2)
+              + "_" + nf(hour(), 2) + nf(minute(), 2) + nf(second(), 2) + ".png");
     println("Saved a frame");
   }
 }
