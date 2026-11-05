@@ -26,3 +26,4 @@ Planned Ideas:
 - I want to add a stats panel with averages per mod, best accuracy and total time played. This would be cool to do in a radar chart.
 - I want to add animated circles that pop in like hit circles when the sketch starts. 
 - I learnt about 3D graphics in class, so I need to figure out an idea on how I can implement this without it being out of place.
+- I could make the glyph circles be spheres, but need to see if it looks nice first.
