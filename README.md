@@ -12,7 +12,7 @@ How to run it: open DearData100/DearData100.pde in Processing and press Run. Hov
                
 Where the data lives: DearData100/data/plays.csv.
 
-Progress: So far I have logged '101' plays over '9' days. I will update this as i go.
+Progress: So far I have logged '115' plays over '11' days. I will update this as i go.
           Additionally i will take a screenshot to show what my data looks like each day! (hopefully i can think of some cool things to add later on too)
           
           100 logged plays milestone met on: 2026-11-07
