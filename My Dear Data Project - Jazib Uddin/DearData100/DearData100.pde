@@ -10,6 +10,7 @@
 // (or save your log from Excel as CSV UTF-8) and run again.
 //
 // Keys: 's' saves a PNG of the current frame into the screenshots folder.
+// Scroll the days with the mouse wheel or by dragging the scroll bar.
 
 final color BG = color(20, 14, 18);
 final color INK = color(240, 235, 237);
@@ -50,7 +51,9 @@ final int DAY_LABEL_WIDTH = 50;
 final int TOTAL_WIDTH = 60;
 
 // Height of one day's row; the glyphs use part of it so rows don't touch.
-float rowH = 40;
+// Fixed 14th Nov 26: once the days don't fit, the list scrolls instead of shrinking.
+final float ROW_H = 48;
+float rowH = ROW_H;
 final float GLYPH_SHARE = 0.8;
 int perLine = 1;        // most plays drawn on one line of a day's bar
 float[] dayTop;         // top of each day's bar
@@ -58,6 +61,14 @@ int[] dayLines;         // how many lines each day's bar has
 
 // Map styles in the order the legend shows them.
 String[] STYLES = {"JUMP", "SPEED", "HYBRID", "READING", "TECH"};
+
+// Scrolling. The days are drawn in a window from LIST_TOP to the bottom of
+// the screen; scrollY is how far down the list we have moved.
+final int LIST_TOP = MARGIN + 60;   // just under the line below the title
+float scrollY = 0;
+float maxScroll = 0;                // 0 when everything fits
+boolean draggingBar = false;
+float dragOffset = 0;               // where on the thumb the mouse grabbed it
 
 void setup() {
   size(1280, 820);
@@ -125,12 +136,12 @@ void layoutGlyphs() {
 
   float top = MARGIN + 70;
   float areaW = width - LEGEND_WIDTH - MARGIN * 2 - DAY_LABEL_WIDTH - TOTAL_WIDTH;
-  float areaH = height - top - MARGIN;
+  
 
   int bestPerLine = maxPerDay;
   float bestCell = 0;
   for (int perLine = maxPerDay; perLine >= 1; perLine--) {
-    float h = min(areaH / totalLines(perLine), 64);
+    float h = ROW_H;
     float c = min(h * GLYPH_SHARE, areaW / perLine / 1.8);
     if (c > bestCell) {
       bestCell = c;
@@ -138,7 +149,7 @@ void layoutGlyphs() {
     }
   }
   perLine = bestPerLine;
-  rowH = min(areaH / totalLines(perLine), 64);
+  rowH = ROW_H;
   float cell = bestCell;
   float stepX = min(areaW / perLine, cell * 1.8);
 
@@ -158,6 +169,8 @@ void layoutGlyphs() {
     }
     y += rowH * dayLines[d];
   }
+  // y is now the bottom of the last day's bar
+  maxScroll = max(0, y + 10 - height);
 }
 
 // How many lines a day with n plays needs.
@@ -267,6 +280,15 @@ void draw() {
             + days.get(0) + " to " + days.get(days.size() - 1) + ").  "
             + round(100.0 * countPassed(plays) / plays.size()) + "% passed.  "
             + plural(up, "play") + " lifted my mood, " + down + " lowered it.");
+  fill(MUTED);
+  textSize(10);
+  textAlign(RIGHT, TOP);
+  text("mood +/-", width - LEGEND_WIDTH - MARGIN - 10, MARGIN + 58);
+
+  // Only draw the days inside the list window, moved up by scrollY.
+  clip(0, LIST_TOP + 12, width - LEGEND_WIDTH, height - LIST_TOP - 12);
+  pushMatrix();
+  translate(0, -scrollY);
   drawRowBars();
   drawDayLabels();
 
@@ -276,22 +298,100 @@ void draw() {
     if (over) hovered = p;
     p.display(over, p == selected);
   }
+  popMatrix();
+  noClip();
 
+  drawScrollBar();
   drawLegend();
   drawSelectedCard();
   if (hovered != null) drawTooltip(hovered);
 }
 
 // Clicking a circle selects it. Clicking empty space keeps the last one.
+// Clicking the scroll bar grabs it instead.
 void mousePressed() {
+  if (maxScroll > 0 && overScrollBar()) {
+    float thumbY = thumbTop();
+    if (mouseY >= thumbY && mouseY <= thumbY + thumbHeight()) {
+      dragOffset = mouseY - thumbY;          // grabbed the thumb
+    } else {
+      dragOffset = thumbHeight() / 2;        // clicked the track: jump there
+      moveThumbTo(mouseY - dragOffset);
+    }
+    draggingBar = true;
+    return;
+  }
   for (Play p : plays) {
     if (p.isUnderMouse()) selected = p;
   }
 }
 
+void mouseDragged() {
+  if (draggingBar) moveThumbTo(mouseY - dragOffset);
+}
+
+void mouseReleased() {
+  draggingBar = false;
+}
+
+// One click of the wheel moves the list by one day row.
+void mouseWheel(MouseEvent event) {
+  scrollY = constrain(scrollY + event.getCount() * ROW_H, 0, maxScroll);
+}
+
+// --- Scroll bar ---------------------------------------------------------
+// A thin bar in the gap between the days and the legend. The thumb's size
+// shows how much of the list fits on screen, its position how far down we are.
+
+float trackX() { return width - LEGEND_WIDTH - MARGIN + 8; }
+float trackTop() { return LIST_TOP + 14; }
+float trackHeight() { return height - 14 - trackTop(); }
+
+float thumbHeight() {
+  float visible = height - LIST_TOP;
+  return max(30, trackHeight() * visible / (visible + maxScroll));
+}
+
+float thumbTop() {
+  if (maxScroll == 0) return trackTop();
+  return map(scrollY, 0, maxScroll, trackTop(), trackTop() + trackHeight() - thumbHeight());
+}
+
+// Turn a thumb position back into a scroll amount.
+void moveThumbTo(float y) {
+  float top = trackTop();
+  float bottom = top + trackHeight() - thumbHeight();
+  scrollY = map(constrain(y, top, bottom), top, bottom, 0, maxScroll);
+}
+
+boolean overScrollBar() {
+  return mouseX > trackX() - 6 && mouseX < trackX() + 14
+      && mouseY > trackTop() && mouseY < trackTop() + trackHeight();
+}
+
+// True when the mouse is over the visible part of the list (not the title
+// or the legend), so hidden plays can't be hovered or clicked.
+boolean mouseInList() {
+  return mouseY > LIST_TOP + 12 && mouseX < width - LEGEND_WIDTH - MARGIN;
+}
+
+void drawScrollBar() {
+  if (maxScroll == 0) return;          // everything fits: no bar
+  float x = trackX();
+  fill(0, 0, 0, 120);
+  stroke(255, 18);
+  strokeWeight(1);
+  rect(x, trackTop(), 8, trackHeight(), 4);
+
+  boolean active = draggingBar || overScrollBar();
+  noStroke();
+  fill(ACCENT, active ? 255 : 170);
+  rect(x, thumbTop(), 8, thumbHeight(), 4);
+}
 // The card under the legend: the selected play's song, its difficulty on
 // the line below, a big copy of its glyph, and its details. Long names wrap
 // instead of being cut, and the card grows upwards to fit them.
+
 void drawSelectedCard() {
   float cw = LEGEND_WIDTH - 12;
   float cx = width - LEGEND_WIDTH - 4;
@@ -500,10 +600,7 @@ void drawRowBars() {
 // Date on the left of each row, net mood change that day on the right.
 void drawDayLabels() {
   float totalX = width - LEGEND_WIDTH - MARGIN - 10;
-  fill(MUTED);
   textSize(10);
-  textAlign(RIGHT, TOP);
-  text("mood +/-", totalX, MARGIN + 58);
   for (int d = 0; d < days.size(); d++) {
     ArrayList<Play> today = playsOn(days.get(d));
     float y = dayTop[d] + rowH * dayLines[d] / 2;

@@ -405,7 +405,9 @@ class Play {
   }
 
   boolean isUnderMouse() {
-    return abs(mouseX - x) < cellSize * 0.6 && abs(mouseY - y) < cellSize * 0.5;
+    // the list is moved up by scrollY, so move the mouse down to match
+    float my = mouseY + scrollY;
+    return mouseInList() && abs(mouseX - x) < cellSize * 0.6 && abs(my - y) < cellSize * 0.5;
   }
 
   String describe() {
