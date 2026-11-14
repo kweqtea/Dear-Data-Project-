@@ -22,6 +22,7 @@ final color MOOD_DOWN = color(255, 50, 95);
 final color MOOD_SAME = color(120, 105, 112);
 final color STYLE_READING = color(255, 150, 40);
 final color STYLE_TECH = color(40, 215, 205);
+final color STYLE_ALT = color(165, 110, 255);
 
 // Rank colours from my skin's results screen.
 final color RANK_GOLD = color(255, 212, 80);     // X and S
@@ -51,7 +52,7 @@ final int DAY_LABEL_WIDTH = 50;
 final int TOTAL_WIDTH = 60;
 
 // Height of one day's row; the glyphs use part of it so rows don't touch.
-// Fixed 14th Nov 26: once the days don't fit, the list scrolls instead of shrinking.
+// Fixed now: once the days don't fit, the list scrolls instead of shrinking.
 final float ROW_H = 48;
 float rowH = ROW_H;
 final float GLYPH_SHARE = 0.8;
@@ -60,7 +61,7 @@ float[] dayTop;         // top of each day's bar
 int[] dayLines;         // how many lines each day's bar has
 
 // Map styles in the order the legend shows them.
-String[] STYLES = {"JUMP", "SPEED", "HYBRID", "READING", "TECH"};
+String[] STYLES = {"JUMP", "SPEED", "HYBRID", "READING", "TECH", "ALT"};
 
 // Scrolling. The days are drawn in a window from LIST_TOP to the bottom of
 // the screen; scrollY is how far down the list we have moved.
@@ -136,7 +137,6 @@ void layoutGlyphs() {
 
   float top = MARGIN + 70;
   float areaW = width - LEGEND_WIDTH - MARGIN * 2 - DAY_LABEL_WIDTH - TOTAL_WIDTH;
-  
 
   int bestPerLine = maxPerDay;
   float bestCell = 0;
@@ -239,6 +239,7 @@ color styleColour(String style) {
   if (style.equals("SPEED")) return INK;
   if (style.equals("READING")) return STYLE_READING;
   if (style.equals("TECH")) return STYLE_TECH;
+  if (style.equals("ALT")) return STYLE_ALT;
   return MUTED;
 }
 
@@ -388,10 +389,10 @@ void drawScrollBar() {
   fill(ACCENT, active ? 255 : 170);
   rect(x, thumbTop(), 8, thumbHeight(), 4);
 }
+
 // The card under the legend: the selected play's song, its difficulty on
 // the line below, a big copy of its glyph, and its details. Long names wrap
 // instead of being cut, and the card grows upwards to fit them.
-
 void drawSelectedCard() {
   float cw = LEGEND_WIDTH - 12;
   float cx = width - LEGEND_WIDTH - 4;
@@ -689,7 +690,7 @@ void drawLegend() {
   legendHeading("Arc colour = map type", lx, y);
   y += 20;
   for (int i = 0; i < STYLES.length; i++) {
-    legendArc(lx + 16 + i * 54, y + 13, 100, STYLES[i], STYLES[i].toLowerCase());
+    legendArc(lx + 16 + i * 48, y + 13, 100, STYLES[i], STYLES[i].toLowerCase());
   }
   y += 46;
 
