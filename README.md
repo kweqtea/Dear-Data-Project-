@@ -20,7 +20,7 @@ Progress: So far I have logged '115' plays over '11' days. I will update this as
 Planned Ideas:
 
 - ~~I want to add some pictures to the background to make it look more like the osu! skin~~ Completed.
-- I want to add a scroll bar when logs get too cluttered. Soon, space is already almost half full.
+- ~~I want to add a scroll bar when logs get too cluttered. Soon, space is already almost half full.~~ Completed 2026-11-14.
 - I want to add music to the menu that can be paused and played. 
 - I want to add short example videos of each map type (jump, speed, hybrid, tech).
 - I want to add filter buttons to show only one map type, mod or place, like uni vs home.
